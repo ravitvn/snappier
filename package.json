@@ -1,0 +1,62 @@
+{
+  "name": "snappier",
+  "version": "1.0.0",
+  "description": "AI study assistant — screenshot any question, get an instant answer",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "package:mac": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg",
+    "package:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "katex": "^0.16.11",
+    "mermaid": "^11.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@electron/fuses": "^1.8.0",
+    "@types/katex": "^0.16.7",
+    "@types/node": "^22.7.4",
+    "@types/react": "^18.3.8",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "30.5.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.6"
+  },
+  "build": {
+    "appId": "com.snappier.app",
+    "productName": "Snappier",
+    "asar": false,
+    "icon": "build/icon",
+    "mac": {
+      "category": "public.app-category.education",
+      "target": ["dmg"],
+      "icon": "build/icon.icns",
+      "sign": false,
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "Snappier captures your screen to read and answer questions.",
+        "LSUIElement": false
+      }
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "sign": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "perMachine": false
+    },
+    "files": ["out/**/*"]
+  }
+}
