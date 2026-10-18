@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron/renderer'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,

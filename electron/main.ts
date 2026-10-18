@@ -1,10 +1,12 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, screen, desktopCapturer, systemPreferences, shell } from 'electron'
+import * as electronModule from 'electron/main'
+const { app, BrowserWindow, ipcMain, globalShortcut, screen, desktopCapturer, systemPreferences, shell } = (electronModule as any).default ?? electronModule as unknown as typeof import('electron/main')
 import { join } from 'path'
 import https from 'https'
 import http from 'http'
 import { createWriteStream } from 'fs'
 import { tmpdir } from 'os'
 
+app.name = 'Snappier'
 const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
@@ -29,6 +31,7 @@ function createWindow(): void {
     },
   })
 
+  mainWindow.setContentProtection(true)
   mainWindow.on('ready-to-show', () => mainWindow!.focus())
 
   mainWindow.webContents.on('before-input-event', (_, input) => {

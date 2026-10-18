@@ -14,7 +14,7 @@ declare global {
   }
 }
 
-const API_BASE = 'https://snappier.net'
+const API_BASE = 'https://snappier-web.vercel.app'
 
 interface HistoryItem {
   id: number
@@ -107,7 +107,7 @@ function AnswerBody({ text }: { text: string }) {
 // ── Auth screen ──────────────────────────────────────────────────────────────
 type AuthMode = 'login' | 'register' | 'forgot'
 
-function AuthScreen({ onAuth }: { onAuth: (token: string, name: string, credits: number) => void }) {
+function AuthScreen({ onAuth, onGemini }: { onAuth: (token: string, name: string, credits: number) => void; onGemini: () => void }) {
   const [mode, setMode] = useState<AuthMode>('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -198,6 +198,17 @@ function AuthScreen({ onAuth }: { onAuth: (token: string, name: string, credits:
           </button>
         </form>
 
+        <div style={{ margin: '14px 0 4px', borderTop: '1px solid var(--border)', paddingTop: 14, textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={onGemini}
+            style={{ background: '#ecfdf5', color: '#065f46', border: '1.5px solid #6ee7b7', borderRadius: 12, padding: '9px 18px', fontWeight: 700, fontSize: 14, cursor: 'pointer', width: '100%' }}
+          >
+            🆓 Use free Gemini key instead
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 6 }}>No account needed · get a key at aistudio.google.com</div>
+        </div>
+
         <div className="auth-link" style={{ marginTop: 10 }}>
           {mode === 'login' && <>
             <a href="#" onClick={() => { setMode('register'); setError(''); setSuccess('') }}>Create account</a>
@@ -271,7 +282,7 @@ async function callGemini(apiKey: string, imageData: string, onChunk: (t: string
   const SYSTEM = "You are Snappier, a friendly AI tutor for students. Look at the screenshot and answer whatever question or problem you see. For math, use LaTeX notation: inline with $...$ and display with $$...$$. For diagrams that would help, use Mermaid code blocks. Keep answers clear and encouraging. Respond with exactly [skip] ONLY if there is no question visible at all."
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key=${apiKey}&alt=sse`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -292,27 +303,16 @@ async function callGemini(apiKey: string, imageData: string, onChunk: (t: string
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     const msg = (err as { error?: { message?: string } })?.error?.message ?? res.statusText
+    console.error('[snappier] Gemini error:', res.status, msg)
     if (res.status === 429) throw new Error('quota_exceeded')
     throw new Error(msg)
   }
 
-  const reader = res.body!.getReader()
-  const dec = new TextDecoder()
-  let full = ''
-
-  while (true) {
-    const { done, value } = await reader.read(); if (done) break
-    for (const line of dec.decode(value, { stream: true }).split('\n')) {
-      if (!line.startsWith('data: ')) continue
-      const d = line.slice(6).trim(); if (d === '[DONE]') break
-      try {
-        const obj = JSON.parse(d)
-        const chunk = obj.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-        if (chunk) { full += chunk; onChunk(full) }
-      } catch { /* partial */ }
-    }
-  }
-  return full
+  const data = await res.json()
+  console.log('[snappier] Gemini response:', JSON.stringify(data).slice(0, 200))
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  if (text) onChunk(text)
+  return text
 }
 
 // ── Backend API call (subscription) ──────────────────────────────────────────
@@ -346,7 +346,12 @@ export default function App() {
   const [userName, setUserName] = useState(() => localStorage.getItem('snappier_name') ?? '')
   const [credits, setCredits] = useState(() => parseInt(localStorage.getItem('snappier_credits') ?? '0'))
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('snappier_gemini_key') ?? '')
-  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [showLogin, setShowLogin] = useState(false)
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('snappier_history') ?? '[]')
+    } catch { return [] }
+  })
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
   const [showSettings, setShowSettings] = useState(false)
@@ -379,9 +384,11 @@ export default function App() {
 
     setLoading(true)
     setStatus('Capturing…')
+    console.log('[snappier] capturing screen, hasGemini:', hasGemini, 'isLoggedIn:', isLoggedIn)
 
     try {
       const imageData = await window.electronAPI.captureScreen()
+      console.log('[snappier] captureScreen result:', imageData ? imageData.slice(0, 40) : imageData)
 
       if (imageData === '__permission_denied__') {
         setStatus('Screen Recording denied — enable in System Settings > Privacy & Security')
@@ -445,12 +452,14 @@ export default function App() {
 
       if (!full || full.trim().toLowerCase() === '[skip]') {
         setHistory(prev => prev.filter(item => item.id !== id))
-        setStatus('Nothing to answer')
+        setStatus('No question found — open a question on screen first, then snap')
+        setTimeout(() => setStatus(''), 4000)
       } else {
         setHistory(prev => prev.map(item => item.id === id ? { ...item, answer: full } : item))
         setStatus('')
       }
     } catch (e) {
+      setHistory(prev => prev.filter(item => item.answer !== ''))
       setStatus('⚠ ' + (e instanceof Error ? e.message : 'Unknown error'))
       setTimeout(() => setStatus(''), 3000)
     }
@@ -463,6 +472,11 @@ export default function App() {
   useEffect(() => {
     window.electronAPI.onTriggerScreenshot(() => screenshotHandlerRef.current())
   }, [])
+
+  useEffect(() => {
+    if (history.length > 0)
+      localStorage.setItem('snappier_history', JSON.stringify(history.slice(0, 20)))
+  }, [history])
 
   const isMac = window.electronAPI?.platform === 'darwin'
   const shortcut = isMac ? '⌘⌥S' : 'Ctrl+Alt+S'
@@ -482,7 +496,7 @@ export default function App() {
       </div>
 
       {!isLoggedIn && !hasGemini ? (
-        <AuthScreen onAuth={handleAuth} />
+        <AuthScreen onAuth={handleAuth} onGemini={() => setShowSettings(true)} />
       ) : (
         <div className="main-wrap">
           {/* Toolbar */}
@@ -498,13 +512,21 @@ export default function App() {
             {hasGemini && <span className="status-chip gemini">🆓 Gemini</span>}
             {!hasGemini && isLoggedIn && <span className="status-chip">✅ Subscribed</span>}
 
+            {history.length > 0 && (
+              <button
+                className="icon-btn"
+                onClick={() => { setHistory([]); localStorage.removeItem('snappier_history') }}
+                style={{ fontSize: 12, width: 'auto', padding: '0 10px', color: '#dc2626' }}
+              >Clear</button>
+            )}
+
             <div className="toolbar-right">
               <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings">⚙️</button>
               {!isLoggedIn && (
                 <button
                   className="icon-btn"
                   style={{ fontSize: 12, width: 'auto', padding: '0 10px' }}
-                  onClick={() => setToken('__prompt__')}
+                  onClick={() => setShowLogin(true)}
                 >
                   Sign in
                 </button>
@@ -542,17 +564,20 @@ export default function App() {
 
           {/* Status bar */}
           <div className="statusbar">
-            <span>{status || (userName ? `Hi ${userName}! 👋` : '')}</span>
+            <span>{userName ? `Hi ${userName}! 👋` : 'Ready'}</span>
             <span className="hotkey">{shortcut}</span>
           </div>
         </div>
       )}
 
       {/* Auth prompt when logged out but has Gemini key */}
-      {!isLoggedIn && hasGemini && token === '__prompt__' && (
-        <div className="settings-overlay" onClick={() => setToken('')}>
-          <div style={{ pointerEvents: 'none' }}>
-            <AuthScreen onAuth={handleAuth} />
+      {showLogin && (
+        <div className="settings-overlay" onClick={e => { if (e.target === e.currentTarget) setShowLogin(false) }}>
+          <div style={{ width: '100%', maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'right', marginBottom: 8 }}>
+              <button onClick={() => setShowLogin(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', fontWeight: 700 }}>✕</button>
+            </div>
+            <AuthScreen onAuth={(t, n, c) => { handleAuth(t, n, c); setShowLogin(false) }} onGemini={() => { setShowLogin(false); setShowSettings(true) }} />
           </div>
         </div>
       )}
@@ -564,6 +589,8 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      {status && <div className="toast">{status}</div>}
     </div>
   )
 }

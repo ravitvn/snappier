@@ -2,7 +2,7 @@
   "name": "snappier",
   "version": "1.0.0",
   "description": "AI study assistant — screenshot any question, get an instant answer",
-  "main": "out/main/index.js",
+  "main": "out/main/index.mjs",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -23,9 +23,9 @@
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "electron": "30.5.1",
+    "electron": "^45.0.0-beta.1",
     "electron-builder": "^25.1.8",
-    "electron-vite": "^2.3.0",
+    "electron-vite": "^5.0.0",
     "typescript": "^5.6.2",
     "vite": "^5.4.6"
   },
@@ -36,7 +36,9 @@
     "icon": "build/icon",
     "mac": {
       "category": "public.app-category.education",
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "build/icon.icns",
       "sign": false,
       "extendInfo": {
@@ -45,7 +47,14 @@
       }
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.ico",
       "sign": false
     },
@@ -57,6 +66,8 @@
       "createStartMenuShortcut": true,
       "perMachine": false
     },
-    "files": ["out/**/*"]
+    "files": [
+      "out/**/*"
+    ]
   }
 }
