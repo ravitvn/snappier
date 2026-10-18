@@ -19,14 +19,14 @@ jobs:
         run: npm ci
 
       - name: Build and package
-        run: npm run package:win
+        run: npm run package:win -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.0.0
           files: dist/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
